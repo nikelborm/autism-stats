@@ -1,0 +1,32 @@
+{
+  "name": "autism-stats",
+  "version": "1.0.0",
+  "description": "Silly calculator to get stats of autism children birth rates",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/nikelborm/autism-stats"
+  },
+  "author": "nikelborm <kolya007.klass@gmail.com>",
+  "maintainers": [
+    {
+      "name": "nikelborm",
+      "url": "https://github.com/nikelborm"
+    }
+  ],
+  "contributors": [
+    {
+      "name": "nikelborm",
+      "url": "https://github.com/nikelborm"
+    }
+  ],
+  "homepage": "https://github.com/nikelborm/autism-stats#readme",
+  "scripts": {
+    "run": "ts-node save_v2.ts"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "@types/node": "^20.14.2",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.4.5"
+  }
+}

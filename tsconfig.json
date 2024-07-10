@@ -1,0 +1,5 @@
+{
+  "compilerOptions": {
+    "lib": ["ESNext.Array", "DOM", "ESNext"]
+  }
+}

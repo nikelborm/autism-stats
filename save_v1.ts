@@ -24,7 +24,7 @@ const config = {
   probabilityOfDonorToBeAutistic: 0.05 as number,
   probabilityOfRecipientToBeAutistic: 0.05 as number,
   chanceOfDonationToCauseAutisticChild: {
-    ifBothAreAutistic: 1 as number,
+    ifBothPartnersAreAutistic: 1 as number,
     ifOnePartnerIsAutistic: 0.5 as number,
     ifNoneAreAutistic: 0 as number
   },
@@ -98,7 +98,7 @@ sourceArray = expandMatrix({
 sourceArray = expandMatrix({
   sourceArray,
   activateWhen: ctx => ctx.includes('autistic recipient') && ctx.includes('autistic donor'),
-  coefficient: config.chanceOfDonationToCauseAutisticChild.ifBothAreAutistic,
+  coefficient: config.chanceOfDonationToCauseAutisticChild.ifBothPartnersAreAutistic,
   option: 'will result in autistic child',
   reverseOption: 'will result in neurotypical child'
 })
@@ -130,7 +130,7 @@ function getChancesLowLevel({
   probabilityOfDonorToBeAutistic: a, // +
   probabilityOfRecipientToBeAutistic: b, // +
   chanceOfDonationToCauseAutisticChild: {
-    ifBothAreAutistic: c,
+    ifBothPartnersAreAutistic: c,
     ifOnePartnerIsAutistic: d,
     ifNoneAreAutistic: e,
   },

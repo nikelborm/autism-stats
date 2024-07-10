@@ -2,7 +2,7 @@ const chances = getChances({
   probabilityOfDonorToBeAutistic: 0.05,
   probabilityOfRecipientToBeAutistic: 0.05,
   chanceOfDonationToCauseAutisticChild: {
-    ifBothAreAutistic: 1,
+    ifBothPartnersAreAutistic: 1,
     ifOnePartnerIsAutistic: 0.5,
     ifNoneAreAutistic: 0
   },
@@ -24,7 +24,7 @@ function getChances(config: {
   probabilityOfDonorToBeAutistic: number,
   probabilityOfRecipientToBeAutistic: number,
   chanceOfDonationToCauseAutisticChild: {
-    ifBothAreAutistic: number,
+    ifBothPartnersAreAutistic: number,
     ifOnePartnerIsAutistic: number,
     ifNoneAreAutistic: number,
   },
@@ -64,7 +64,7 @@ function getChances(config: {
     {
       getCoefficient: (ctx) =>
         ctx.includes('autistic recipient') && ctx.includes('autistic donor')
-          ? config.chanceOfDonationToCauseAutisticChild.ifBothAreAutistic
+          ? config.chanceOfDonationToCauseAutisticChild.ifBothPartnersAreAutistic
           : ctx.includes('neurotypical recipient') && ctx.includes('neurotypical donor')
             ? config.chanceOfDonationToCauseAutisticChild.ifNoneAreAutistic
             : config.chanceOfDonationToCauseAutisticChild.ifOnePartnerIsAutistic,

@@ -1,5 +1,13 @@
 # Autism stats example
 
+## What is this?
+
+It's just silly little calculator to get stats of autism children' birth rates
+
+## What's for?
+
+For fun.
+
 ## Install dependencies
 
 ```bash

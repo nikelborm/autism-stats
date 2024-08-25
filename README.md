@@ -57,7 +57,7 @@ It will print something like this:
 └───────────────────────────────┴────────┴───────────────┴───────────────────┘
 ```
 
-Output will differ depending on the parameters you set at the beggining of `save_v2.ts`:
+Output will differ depending on the parameters you set at the beggining of `index.ts`:
 ```javascript
 const chances = getChances({
   probabilityOfDonorToBeAutistic: 0.05,

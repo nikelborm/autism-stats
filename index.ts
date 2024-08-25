@@ -37,7 +37,7 @@ function getChances(config: {
     ifRecipientIsNeurotypical: number,
   },
 }) {
-  return applyPipeline([{ ctx: [], coefficient: 1 }], [
+  return applyPipeline([{ ctx: new Set(), coefficient: 1 }], [
     {
       getCoefficient: () => config.probabilityOfRecipientToBeAutistic,
       option: 'autistic recipient',
@@ -45,7 +45,7 @@ function getChances(config: {
     },
     {
       getCoefficient: (ctx) =>
-        ctx.includes('autistic recipient')
+        ctx.has('autistic recipient')
           ? config.chanceThatRecipientWillSkipChoosingDonor.ifRecipientIsAutistic
           : config.chanceThatRecipientWillSkipChoosingDonor.ifRecipientIsNeurotypical,
       option: 'decided to skip',
@@ -53,8 +53,8 @@ function getChances(config: {
     },
     {
       getCoefficient: (ctx) =>
-        ctx.includes('decided not to skip')
-          ? (ctx.includes('autistic recipient')
+        ctx.has('decided not to skip')
+          ? (ctx.has('autistic recipient')
             ? config.chanceThatInvolvedRecipientWillChooseAutisticDonor.ifRecipientIsAutistic
             : config.chanceThatInvolvedRecipientWillChooseAutisticDonor.ifRecipientIsNeurotypical)
           : config.probabilityOfDonorToBeAutistic,
@@ -63,9 +63,9 @@ function getChances(config: {
     },
     {
       getCoefficient: (ctx) =>
-        ctx.includes('autistic recipient') && ctx.includes('autistic donor')
+        ctx.has('autistic recipient') && ctx.has('autistic donor')
           ? config.chanceOfDonationToCauseAutisticChild.ifBothPartnersAreAutistic
-          : ctx.includes('neurotypical recipient') && ctx.includes('neurotypical donor')
+          : ctx.has('neurotypical recipient') && ctx.has('neurotypical donor')
             ? config.chanceOfDonationToCauseAutisticChild.ifNoneAreAutistic
             : config.chanceOfDonationToCauseAutisticChild.ifOnePartnerIsAutistic,
       option: 'will cause autistic child',
@@ -74,31 +74,31 @@ function getChances(config: {
   ])
 }
 
-function logInsightsFromMatrix(chances: MatrixEntry[]) {
+function logInsightsFromMatrix(chances: MatrixEntries<AllContextTags>) {
   const getCoefficientCalculatorInScope =
-    (parentScope: (ctx: string[]) => boolean) =>
-      (subScope: (ctx: string[]) => boolean = () => true) =>
+    (parentScope: (ctx: Set<AllContextTags>) => boolean) =>
+      (subScope: (ctx: Set<AllContextTags>) => boolean = () => true) =>
         stripTail(
           chances
             .filter(e => parentScope(e.ctx) && subScope(e.ctx))
             .reduce((sum, e) => sum + e.coefficient, 0)
         )
 
-  function getGroupedBySubCategory(subCategoryName: string) {
-    const calcCoefficient = getCoefficientCalculatorInScope(ctx => ctx.includes(subCategoryName))
+  function getGroupedBySubCategory(subCategoryName: AllContextTags) {
+    const calcCoefficient = getCoefficientCalculatorInScope(ctx => ctx.has(subCategoryName))
     return {
       [subCategoryName]: {
-        autisticChild:     calcCoefficient(ctx => ctx.includes('will cause autistic child')),
-        neurotypicalChild: calcCoefficient(ctx => ctx.includes('will cause neurotypical child')),
+        autisticChild:     calcCoefficient(ctx => ctx.has('will cause autistic child')),
+        neurotypicalChild: calcCoefficient(ctx => ctx.has('will cause neurotypical child')),
         all:               calcCoefficient()
       }
     }
   }
 
-  function getGroupedByCategory(categoryName: string) {
+  function getGroupedByCategory(categoryName: AllContextTags) {
     return {
       [categoryName]: {
-        all: getCoefficientCalculatorInScope(ctx => ctx.includes(categoryName))()
+        all: getCoefficientCalculatorInScope(ctx => ctx.has(categoryName))()
       }
     }
   }
@@ -116,23 +116,23 @@ function logInsightsFromMatrix(chances: MatrixEntry[]) {
 }
 
 function applyPipeline(
-  sourceArray: MatrixEntry[],
+  sourceArray: MatrixEntries<never>,
   pipeline: {
-    getCoefficient: (ctx: string[]) => number,
+    getCoefficient: (ctx: MatrixEntries) => number,
     option: string,
     reverseOption: string,
   }[]
 ) {
   let matrix = sourceArray
   for (const { getCoefficient, option, reverseOption } of pipeline) {
-    const newMatrix: MatrixEntry[] = [];
+    const newMatrix: MatrixEntries<T> = [];
     for (const { ctx, coefficient: previousCoefficient } of matrix) {
-      const coefficient = getCoefficient(ctx);
-      if (coefficient < 0 || coefficient > 1)
+      const additionalCoefficient = getCoefficient(ctx);
+      if (additionalCoefficient < 0 || additionalCoefficient > 1)
         throw Error('Incorrect chances');
       newMatrix.push(
-        { ctx: [...ctx, option       ], coefficient: previousCoefficient * (coefficient    )},
-        { ctx: [...ctx, reverseOption], coefficient: previousCoefficient * (1 - coefficient)}
+        { ctx: ctx.union(new Set([option       ])), coefficient: previousCoefficient * (additionalCoefficient    )},
+        { ctx: ctx.union(new Set([reverseOption])), coefficient: previousCoefficient * (1 - additionalCoefficient)}
       )
     }
     matrix = newMatrix;
@@ -142,10 +142,10 @@ function applyPipeline(
   return matrix;
 }
 
-function logMatrix(matrix: MatrixEntry[]) {
+function logMatrix<T extends string>(matrix: MatrixEntries<T>) {
   console.table(
     matrix
-      .sort((a, b) => a.ctx.join(', ').localeCompare(b.ctx.join(', ')))
+      .sort((a, b) => [...a.ctx].join(', ').localeCompare([...b.ctx].join(', ')))
       .map(v => [stripTail(v.coefficient), ...v.ctx])
   )
 }
@@ -154,7 +154,17 @@ function stripTail(n: number) {
   return Number(n.toFixed(10))
 }
 
-type MatrixEntry = {
-  ctx: string[],
+type MatrixEntries<T extends string> = {
+  ctx: Set<T>,
   coefficient: number
-};
+}[];
+
+type AllContextTags =
+  | 'will cause autistic child'
+  | 'will cause neurotypical child'
+  | 'decided to skip'
+  | 'decided not to skip'
+  | 'autistic recipient'
+  | 'neurotypical recipient'
+  | 'autistic donor'
+  | 'neurotypical donor'

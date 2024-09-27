@@ -115,10 +115,10 @@ function logInsightsFromMatrix(chances: MatrixEntries<AllContextTags>) {
   })
 }
 
-function applyPipeline(
-  sourceArray: MatrixEntries<never>,
+function applyPipeline<T extends MatrixEntries<string>, K extends (T extends MatrixEntries<infer U> ? U : never)>(
+  sourceArray: T,
   pipeline: {
-    getCoefficient: (ctx: MatrixEntries) => number,
+    getCoefficient: (ctx: Set<K>) => number,
     option: string,
     reverseOption: string,
   }[]

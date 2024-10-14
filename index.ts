@@ -1,3 +1,6 @@
+// https://stackoverflow.com/a/53175538
+// https://github.com/microsoft/TypeScript/issues/30370
+
 const chances = getChances({
   probabilityOfDonorToBeAutistic: 0.05,
   probabilityOfRecipientToBeAutistic: 0.05,

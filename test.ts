@@ -23,7 +23,7 @@ const asd = [
     reverseOption: 'neurotypical recipient'
   },
   {
-    getCoefficient: (ctx) =>
+    getCoefficient: (ctx: Set<string>) =>
       ctx.has('autistic recipient')
         ? config.chanceThatRecipientWillSkipChoosingDonor.ifRecipientIsAutistic
         : config.chanceThatRecipientWillSkipChoosingDonor.ifRecipientIsNeurotypical,
@@ -31,7 +31,7 @@ const asd = [
     reverseOption: 'decided not to skip'
   },
   {
-    getCoefficient: (ctx) =>
+    getCoefficient: (ctx: Set<string>) =>
       ctx.has('decided not to skip')
         ? (ctx.has('autistic recipient')
           ? config.chanceThatInvolvedRecipientWillChooseAutisticDonor.ifRecipientIsAutistic
@@ -41,7 +41,7 @@ const asd = [
     reverseOption: 'neurotypical donor'
   },
   {
-    getCoefficient: (ctx) =>
+    getCoefficient: (ctx: Set<string>) =>
       ctx.has('autistic recipient') && ctx.has('autistic donor')
         ? config.chanceOfDonationToCauseAutisticChild.ifBothPartnersAreAutistic
         : ctx.has('neurotypical recipient') && ctx.has('neurotypical donor')

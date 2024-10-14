@@ -1,6 +1,8 @@
 // https://stackoverflow.com/a/53175538
 // https://github.com/microsoft/TypeScript/issues/30370
 
+type Merge<T> = { [P in keyof T]: T[P] } & {};
+
 const chances = getChances({
   probabilityOfDonorToBeAutistic: 0.05,
   probabilityOfRecipientToBeAutistic: 0.05,
@@ -40,68 +42,120 @@ function getChances(config: {
     ifRecipientIsNeurotypical: number,
   },
 }) {
-  return applyPipeline([{ ctx: new Set(), coefficient: 1 }], [
-    {
-      getCoefficient: () => config.probabilityOfRecipientToBeAutistic,
-      option: 'autistic recipient',
-      reverseOption: 'neurotypical recipient'
-    },
-    {
-      getCoefficient: (ctx) =>
+  // pipeline length is always >= 1
+  return applyPipeline(
+    [{ ctx: new Set(), factor: 1 }],
+    [
+      [ 'autistic recipient', 'neurotypical recipient' ],
+      [ 'decided to skip', 'decided not to skip' ],
+      [ 'autistic donor', 'neurotypical donor' ],
+      [ 'will cause autistic child', 'will cause neurotypical child' ]
+    ],
+    [
+      () => config.probabilityOfRecipientToBeAutistic,
+      (ctx) =>
         ctx.has('autistic recipient')
           ? config.chanceThatRecipientWillSkipChoosingDonor.ifRecipientIsAutistic
           : config.chanceThatRecipientWillSkipChoosingDonor.ifRecipientIsNeurotypical,
-      option: 'decided to skip',
-      reverseOption: 'decided not to skip'
-    },
-    {
-      getCoefficient: (ctx) =>
+      (ctx) =>
         ctx.has('decided not to skip')
           ? (ctx.has('autistic recipient')
             ? config.chanceThatInvolvedRecipientWillChooseAutisticDonor.ifRecipientIsAutistic
             : config.chanceThatInvolvedRecipientWillChooseAutisticDonor.ifRecipientIsNeurotypical)
           : config.probabilityOfDonorToBeAutistic,
-      option: 'autistic donor',
-      reverseOption: 'neurotypical donor'
-    },
-    {
-      getCoefficient: (ctx) =>
+      (ctx) =>
         ctx.has('autistic recipient') && ctx.has('autistic donor')
           ? config.chanceOfDonationToCauseAutisticChild.ifBothPartnersAreAutistic
           : ctx.has('neurotypical recipient') && ctx.has('neurotypical donor')
             ? config.chanceOfDonationToCauseAutisticChild.ifNoneAreAutistic
             : config.chanceOfDonationToCauseAutisticChild.ifOnePartnerIsAutistic,
-      option: 'will cause autistic child',
-      reverseOption: 'will cause neurotypical child'
-    },
-  ])
+    ]
+  )
 }
 
-function logInsightsFromMatrix(chances: MatrixEntries<AllContextTags>) {
-  const getCoefficientCalculatorInScope =
-    (parentScope: (ctx: Set<AllContextTags>) => boolean) =>
-      (subScope: (ctx: Set<AllContextTags>) => boolean = () => true) =>
+
+type Concatenate<Options extends OptionsInGeneral> =
+  Options extends [
+    infer CurrentOptions extends OptionPair,
+    ...infer RestOptions extends OptionsInGeneral
+  ]
+    ?
+      | CurrentOptions[0] /* normal option */
+      | CurrentOptions[1] /* reverse option */
+      | Concatenate<RestOptions>
+    : never;
+
+type Transformation<
+  IterationInfo extends IterationInfoObject
+> = IterationInfo['leftNeighbors'] extends infer U extends OptionsInGeneral
+  ? (ctx: Set<Concatenate<U>>) => number
+  : never;
+
+
+type IterationInfoObject<
+  LeftNeighbors extends any[] = any[],
+  CurrentCursor extends any = any,
+  RightNeighbors extends any[] = any[],
+> = {
+  leftNeighbors: LeftNeighbors,
+  currentCursor: CurrentCursor,
+  rightNeighbors: RightNeighbors,
+};
+
+
+
+type Mapper<
+  Elements extends any[],
+  CurrentIterationInfo extends IterationInfoObject =
+    Elements extends [infer CurrentCursor, ...infer RightNeighbors]
+      ? IterationInfoObject<[], CurrentCursor, RightNeighbors>
+      : never
+> =
+  [
+    Transformation<CurrentIterationInfo>,
+    ...(CurrentIterationInfo['rightNeighbors'] extends [infer NewCursor, ...infer NewRightNeighbors]
+      ? Mapper<
+        Elements,
+        IterationInfoObject<
+          [...CurrentIterationInfo['leftNeighbors'], CurrentIterationInfo['currentCursor']],
+          NewCursor,
+          NewRightNeighbors
+        >
+      >
+      : []
+    )
+  ];
+
+type OptionPair = [option: string, reverseOption: string]
+type OptionsInGeneral = OptionPair[];
+
+
+
+function logInsightsFromMatrix(chances: MatrixEntries) {
+  const getFactorCalculatorInScope =
+    (parentScope: (ctx: Set<string>) => boolean) =>
+      (subScope: (ctx: Set<string>) => boolean = () => true) =>
         stripTail(
           chances
             .filter(e => parentScope(e.ctx) && subScope(e.ctx))
-            .reduce((sum, e) => sum + e.coefficient, 0)
+            .reduce((sum, e) => sum + e.factor, 0)
         )
 
-  function getGroupedBySubCategory(subCategoryName: AllContextTags) {
-    const calcCoefficient = getCoefficientCalculatorInScope(ctx => ctx.has(subCategoryName))
+  function getGroupedBySubCategory(subCategoryName: string) {
+    const calcFactor = getFactorCalculatorInScope(ctx => ctx.has(subCategoryName))
     return {
       [subCategoryName]: {
-        autisticChild:     calcCoefficient(ctx => ctx.has('will cause autistic child')),
-        neurotypicalChild: calcCoefficient(ctx => ctx.has('will cause neurotypical child')),
-        all:               calcCoefficient()
+        autisticChild:     calcFactor(ctx => ctx.has('will cause autistic child')),
+        neurotypicalChild: calcFactor(ctx => ctx.has('will cause neurotypical child')),
+        all:               calcFactor()
       }
     }
   }
 
-  function getGroupedByCategory(categoryName: AllContextTags) {
+  function getGroupedByCategory(categoryName: string) {
     return {
       [categoryName]: {
-        all: getCoefficientCalculatorInScope(ctx => ctx.has(categoryName))()
+        all: getFactorCalculatorInScope(ctx => ctx.has(categoryName))()
       }
     }
   }
@@ -118,38 +172,43 @@ function logInsightsFromMatrix(chances: MatrixEntries<AllContextTags>) {
   })
 }
 
-function applyPipeline<T extends MatrixEntries<string>, K extends (T extends MatrixEntries<infer U> ? U : never)>(
-  sourceArray: T,
-  pipeline: {
-    getCoefficient: (ctx: Set<K>) => number,
-    option: string,
-    reverseOption: string,
-  }[]
+function applyPipeline<
+  const OptionPairs extends OptionsInGeneral,
+  const FactorCalculators extends Mapper<OptionPairs>
+>(
+  sourceArray: MatrixEntries,
+  optionPairs: OptionPairs,
+  factorCalculators: FactorCalculators
 ) {
   let matrix = sourceArray
-  for (const { getCoefficient, option, reverseOption } of pipeline) {
-    const newMatrix: MatrixEntries<T> = [];
-    for (const { ctx, coefficient: previousCoefficient } of matrix) {
-      const additionalCoefficient = getCoefficient(ctx);
-      if (additionalCoefficient < 0 || additionalCoefficient > 1)
+
+  for (let i = 0; i < optionPairs.length; i++) {
+    const [option, reverseOption] = optionPairs[i]!
+    const getFactor = <unknown>factorCalculators[i] as (ctx: Set<string>) => number
+
+    matrix = matrix.flatMap(({ ctx, factor: previousFactor }) => {
+      const additionalFactor = getFactor(ctx);
+
+      if (additionalFactor < 0 || additionalFactor > 1)
         throw Error('Incorrect chances');
-      newMatrix.push(
-        { ctx: ctx.union(new Set([option       ])), coefficient: previousCoefficient * (additionalCoefficient    )},
-        { ctx: ctx.union(new Set([reverseOption])), coefficient: previousCoefficient * (1 - additionalCoefficient)}
-      )
-    }
-    matrix = newMatrix;
+
+      return [
+        { ctx: ctx.union(new Set([option       ])), factor: previousFactor * (additionalFactor    )},
+        { ctx: ctx.union(new Set([reverseOption])), factor: previousFactor * (1 - additionalFactor)}
+      ]
+    });
   }
+
   logMatrix(matrix);
 
   return matrix;
 }
 
-function logMatrix<T extends string>(matrix: MatrixEntries<T>) {
+function logMatrix(matrix: MatrixEntries) {
   console.table(
     matrix
       .sort((a, b) => [...a.ctx].join(', ').localeCompare([...b.ctx].join(', ')))
-      .map(v => [stripTail(v.coefficient), ...v.ctx])
+      .map(v => [stripTail(v.factor), ...v.ctx])
   )
 }
 
@@ -157,12 +216,12 @@ function stripTail(n: number) {
   return Number(n.toFixed(10))
 }
 
-type MatrixEntries<T extends string> = {
-  ctx: Set<T>,
-  coefficient: number
+type MatrixEntries = {
+  ctx: Set<string>,
+  factor: number
 }[];
 
-type AllContextTags =
+type ASd =
   | 'will cause autistic child'
   | 'will cause neurotypical child'
   | 'decided to skip'

@@ -1,6 +1,50 @@
 {
   "compilerOptions": {
-    "lib": ["ESNext.Array", "DOM", "ESNext"],
-    "target": "ESNext"
+    "module": "commonjs",
+    "noImplicitOverride": true,
+    "noImplicitReturns": true,
+    "noUnusedLocals": true,
+    "declaration": true,
+    "removeComments": true,
+    "emitDecoratorMetadata": true,
+    "experimentalDecorators": true,
+    "allowSyntheticDefaultImports": true,
+    "noPropertyAccessFromIndexSignature": true,
+    "target": "ESNext",
+    "sourceMap": true,
+    "preserveWatchOutput": true,
+    "allowUnusedLabels": false,
+    "outDir": "./dist",
+    "allowUnreachableCode": false,
+    "baseUrl": "./",
+    "incremental": true,
+    "lib": ["ESNext"],
+    "exactOptionalPropertyTypes": false, // this property is cool but sometimes it pisses me off
+    "allowJs": false,
+    "noErrorTruncation": true,
+    "skipLibCheck": true,
+    "noImplicitAny": false,
+    "forceConsistentCasingInFileNames": true,
+    "noFallthroughCasesInSwitch": true,
+    "strict": true,
+    "resolveJsonModule": true,
+    "strictFunctionTypes": true,
+    "strictNullChecks": true,
+    "noImplicitThis": true,
+    "strictBindCallApply": true,
+    "noUncheckedIndexedAccess":true,
+    "useUnknownInCatchVariables": true,
+    "strictPropertyInitialization": true,
+    "alwaysStrict":true,
+    "noUnusedParameters": false,
+    "noImplicitUseStrict": false,
+    "suppressExcessPropertyErrors": false,
+    "suppressImplicitAnyIndexErrors": false,
+    "noStrictGenericChecks": false,
+    "plugins": [
+      {
+        "name": "typescript-strict-plugin",
+      }
+    ]
   }
 }

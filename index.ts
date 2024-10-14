@@ -1,5 +1,6 @@
 // https://stackoverflow.com/a/53175538
 // https://github.com/microsoft/TypeScript/issues/30370
+// https://github.com/microsoft/TypeScript/pull/52088
 
 type Merge<T> = { [P in keyof T]: T[P] } & {};
 

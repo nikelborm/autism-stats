@@ -77,7 +77,3 @@ const chances = getChances({
 ```
 
 All parameters are normalized from `0` to `1`.
-
-## TODO
-
-1. Integrate codegen from https://github.com/ksxnodemodules/ts-pipe-compose

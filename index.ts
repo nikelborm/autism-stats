@@ -53,22 +53,24 @@ function getChances(config: {
   const reverseFactorWhen = <T, U extends T>(
     currentOption: T,
     expectedOption: U,
-    matchingFactor: number
-  ) => (expectedOption === currentOption ? 1 - matchingFactor : matchingFactor);
+    usualFactor: number
+  ) => (expectedOption === currentOption ? 1 - usualFactor : usualFactor);
   // pipeline length is always >= 1
   return applyBranchingTransformationPipeline(
     [{ ctx: {}, result: 1 }],
     {
+      optionName: 'recipient is',
+      options: ['autistic', 'neurotypical'],
       transform: (_, __, recipientIs) =>
         reverseFactorWhen(
           recipientIs,
           'neurotypical',
           config.probabilityOfRecipientToBeAutistic
         ),
-      options: ['autistic', 'neurotypical'],
-      optionName: 'recipient is',
     },
     {
+      optionName: "recipient's decision is",
+      options: ['to skip the choice', 'not to skip the choice'],
       transform: (factor, ctx, decisionIs) =>
         factor *
         reverseFactorWhen(
@@ -80,11 +82,10 @@ function getChances(config: {
             : config.chanceThatRecipientWillSkipChoosingDonor
                 .ifRecipientIsNeurotypical
         ),
-
-      options: ['to skip the choice', 'not to skip the choice'],
-      optionName: "recipient's decision is",
     },
     {
+      optionName: 'donor is',
+      options: ['autistic', 'neurotypical'],
       transform: (factor, ctx, donorIs) =>
         factor *
         reverseFactorWhen(
@@ -98,10 +99,10 @@ function getChances(config: {
                   .ifRecipientIsNeurotypical
             : config.probabilityOfDonorToBeAutistic
         ),
-      options: ['autistic', 'neurotypical'],
-      optionName: 'donor is',
     },
     {
+      optionName: 'caused child to be',
+      options: ['autistic', 'neurotypical'],
       transform: (factor, ctx, childWillBe) =>
         factor *
         reverseFactorWhen(
@@ -115,8 +116,6 @@ function getChances(config: {
             ? config.chanceOfDonationToCauseAutisticChild.ifNoneAreAutistic
             : config.chanceOfDonationToCauseAutisticChild.ifOnePartnerIsAutistic
         ),
-      options: ['autistic', 'neurotypical'],
-      optionName: 'caused child to be',
     }
   );
 }

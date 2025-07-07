@@ -2,7 +2,10 @@
 // https://github.com/microsoft/TypeScript/issues/30370
 // https://github.com/microsoft/TypeScript/pull/52088
 
-type Merge<T> = { [P in keyof T]: T[P] } & {};
+import {
+  applyBranchingTransformationPipeline,
+  type MatrixEntries,
+} from './applyBranchingTransformationPipeline.js';
 
 const chances = getChances({
   probabilityOfDonorToBeAutistic: 0.05,
@@ -10,7 +13,7 @@ const chances = getChances({
   chanceOfDonationToCauseAutisticChild: {
     ifBothPartnersAreAutistic: 1,
     ifOnePartnerIsAutistic: 0.5,
-    ifNoneAreAutistic: 0
+    ifNoneAreAutistic: 0,
   },
   chanceThatRecipientWillSkipChoosingDonor: {
     ifRecipientIsNeurotypical: 0.2,
@@ -19,379 +22,162 @@ const chances = getChances({
   chanceThatInvolvedRecipientWillChooseAutisticDonor: {
     ifRecipientIsNeurotypical: 0.125,
     ifRecipientIsAutistic: 0.6,
-  }
-})
+  },
+});
 
-logInsightsFromMatrix(chances)
+const renderCtx = (ctx: Record<string, string>) =>
+  Object.entries(ctx).map((e) => e.join(' '));
 
-
+logMatrix(chances);
+logInsightsFromMatrix(
+  chances.map((e) => ({ ctx: renderCtx(e.ctx), factor: e.result }))
+);
 
 function getChances(config: {
-  probabilityOfDonorToBeAutistic: number,
-  probabilityOfRecipientToBeAutistic: number,
+  probabilityOfDonorToBeAutistic: number;
+  probabilityOfRecipientToBeAutistic: number;
   chanceOfDonationToCauseAutisticChild: {
-    ifBothPartnersAreAutistic: number,
-    ifOnePartnerIsAutistic: number,
-    ifNoneAreAutistic: number,
-  },
+    ifBothPartnersAreAutistic: number;
+    ifOnePartnerIsAutistic: number;
+    ifNoneAreAutistic: number;
+  };
   chanceThatRecipientWillSkipChoosingDonor: {
-    ifRecipientIsAutistic: number,
-    ifRecipientIsNeurotypical: number,
-  },
+    ifRecipientIsAutistic: number;
+    ifRecipientIsNeurotypical: number;
+  };
   chanceThatInvolvedRecipientWillChooseAutisticDonor: {
-    ifRecipientIsAutistic: number,
-    ifRecipientIsNeurotypical: number,
-  },
+    ifRecipientIsAutistic: number;
+    ifRecipientIsNeurotypical: number;
+  };
 }) {
+  const reverseFactorWhen = <T, U extends T>(
+    currentOption: T,
+    expectedOption: U,
+    matchingFactor: number
+  ) => (expectedOption === currentOption ? 1 - matchingFactor : matchingFactor);
   // pipeline length is always >= 1
-  return applyPipeline(
-    [{ ctx: [], factor: 1 }],
-    [
-      {
-        getFactor: () => config.probabilityOfRecipientToBeAutistic,
-        option: 'autistic recipient',
-        reverseOption: 'neurotypical recipient'
-      },
-      {
-        getFactor: (ctx) =>
-          ctx[0] === 'autistic recipient'
-            ? config.chanceThatRecipientWillSkipChoosingDonor.ifRecipientIsAutistic
-            : config.chanceThatRecipientWillSkipChoosingDonor.ifRecipientIsNeurotypical,
-        option: 'decided to skip',
-        reverseOption: 'decided not to skip'
-      },
-      {
-        getFactor: (ctx) =>
-          ctx[1] === 'decided not to skip'
-            ? (ctx[0] === 'autistic recipient'
-              ? config.chanceThatInvolvedRecipientWillChooseAutisticDonor.ifRecipientIsAutistic
-              : config.chanceThatInvolvedRecipientWillChooseAutisticDonor.ifRecipientIsNeurotypical)
-            : config.probabilityOfDonorToBeAutistic,
-        option: 'autistic donor',
-        reverseOption: 'neurotypical donor'
-      },
-      {
-        getFactor: (ctx) =>
-          ctx[0] === 'autistic recipient' && ctx[2] === 'autistic donor'
-            ? config.chanceOfDonationToCauseAutisticChild.ifBothPartnersAreAutistic
-            : ctx[0] === 'neurotypical recipient' && ctx[2] === 'neurotypical donor'
-              ? config.chanceOfDonationToCauseAutisticChild.ifNoneAreAutistic
-              : config.chanceOfDonationToCauseAutisticChild.ifOnePartnerIsAutistic,
-        option: 'will cause autistic child',
-        reverseOption: 'will cause neurotypical child'
-      },
-    ]
-  )
+  return applyBranchingTransformationPipeline(
+    [{ ctx: {}, result: 1 }],
+    {
+      transform: (_, __, recipientIs) =>
+        reverseFactorWhen(
+          recipientIs,
+          'neurotypical',
+          config.probabilityOfRecipientToBeAutistic
+        ),
+      options: ['autistic', 'neurotypical'],
+      optionName: 'recipient is',
+    },
+    {
+      transform: (factor, ctx, decisionIs) =>
+        factor *
+        reverseFactorWhen(
+          decisionIs,
+          'not to skip',
+          ctx['recipient is'] === 'autistic'
+            ? config.chanceThatRecipientWillSkipChoosingDonor
+                .ifRecipientIsAutistic
+            : config.chanceThatRecipientWillSkipChoosingDonor
+                .ifRecipientIsNeurotypical
+        ),
+
+      options: ['to skip', 'not to skip'],
+      optionName: 'decision is',
+    },
+    {
+      transform: (factor, ctx, donorIs) =>
+        factor *
+        reverseFactorWhen(
+          donorIs,
+          'neurotypical',
+          ctx['decision is'] === 'not to skip'
+            ? ctx['recipient is'] === 'autistic'
+              ? config.chanceThatInvolvedRecipientWillChooseAutisticDonor
+                  .ifRecipientIsAutistic
+              : config.chanceThatInvolvedRecipientWillChooseAutisticDonor
+                  .ifRecipientIsNeurotypical
+            : config.probabilityOfDonorToBeAutistic
+        ),
+      options: ['autistic', 'neurotypical'],
+      optionName: 'donor is',
+    },
+    {
+      transform: (factor, ctx, childWillBe) =>
+        factor *
+        reverseFactorWhen(
+          childWillBe,
+          'neurotypical',
+          ctx['recipient is'] === 'autistic' && ctx['donor is'] === 'autistic'
+            ? config.chanceOfDonationToCauseAutisticChild
+                .ifBothPartnersAreAutistic
+            : ctx['recipient is'] === 'neurotypical' &&
+              ctx['donor is'] === 'neurotypical'
+            ? config.chanceOfDonationToCauseAutisticChild.ifNoneAreAutistic
+            : config.chanceOfDonationToCauseAutisticChild.ifOnePartnerIsAutistic
+        ),
+      options: ['autistic', 'neurotypical'],
+      optionName: 'caused child to be',
+    }
+  );
 }
 
-
-type Concatenate<Options extends OptionsInGeneral> =
-  Options extends [
-    infer CurrentOptions extends OptionPair,
-    ...infer RestOptions extends OptionsInGeneral
-  ]
-    ?
-      | CurrentOptions[0] /* normal option */
-      | CurrentOptions[1] /* reverse option */
-      | Concatenate<RestOptions>
-    : never;
-
-type Transformation<
-  IterationInfo extends IterationInfoObject
-> = IterationInfo['leftNeighbors'] extends infer U extends OptionsInGeneral
-  ? (ctx: Set<Concatenate<U>>) => number
-  : never;
-
-
-type IterationInfoObject<
-  LeftNeighbors extends any[] = any[],
-  CurrentCursor extends any = any,
-  RightNeighbors extends any[] = any[],
-> = {
-  leftNeighbors: LeftNeighbors,
-  currentCursor: CurrentCursor,
-  rightNeighbors: RightNeighbors,
-};
-
-
-
-type Mapper<
-  Elements extends any[],
-  CurrentIterationInfo extends IterationInfoObject =
-    Elements extends [infer CurrentCursor, ...infer RightNeighbors]
-      ? IterationInfoObject<[], CurrentCursor, RightNeighbors>
-      : never
-> =
-  [
-    Transformation<CurrentIterationInfo>,
-    ...(CurrentIterationInfo['rightNeighbors'] extends [infer NewCursor, ...infer NewRightNeighbors]
-      ? Mapper<
-        Elements,
-        IterationInfoObject<
-          [...CurrentIterationInfo['leftNeighbors'], CurrentIterationInfo['currentCursor']],
-          NewCursor,
-          NewRightNeighbors
-        >
-      >
-      : []
-    )
-  ];
-
-type OptionPair = [option: string, reverseOption: string]
-type OptionsInGeneral = OptionPair[];
-
-
-
-function logInsightsFromMatrix(chances: MatrixEntries) {
-  const getFactorCalculatorInScope =
+function logInsightsFromMatrix(chances: { ctx: string[]; factor: number }[]) {
+  const transformCalculatorInScope =
     (parentScope: (ctx: Array<string>) => boolean) =>
-      (subScope: (ctx: Array<string>) => boolean = () => true) =>
-        stripTail(
-          chances
-            .filter(e => parentScope(e.ctx) && subScope(e.ctx))
-            .reduce((sum, e) => sum + e.factor, 0)
-        )
+    (subScope: (ctx: Array<string>) => boolean = () => true) =>
+      stripTail(
+        chances
+          .filter((e) => parentScope(e.ctx) && subScope(e.ctx))
+          .reduce((sum, e) => sum + e.factor, 0)
+      );
 
   function getGroupedBySubCategory(subCategoryName: string) {
-    const calcFactor = getFactorCalculatorInScope(ctx => ctx.includes(subCategoryName))
+    const calcFactor = transformCalculatorInScope((ctx) =>
+      ctx.includes(subCategoryName)
+    );
     return {
       [subCategoryName]: {
-        autisticChild:     calcFactor(ctx => ctx.includes('will cause autistic child')),
-        neurotypicalChild: calcFactor(ctx => ctx.includes('will cause neurotypical child')),
-        all:               calcFactor()
-      }
-    }
+        autisticChild: calcFactor((ctx) =>
+          ctx.includes('caused child to be autistic')
+        ),
+        neurotypicalChild: calcFactor((ctx) =>
+          ctx.includes('caused child to be neurotypical')
+        ),
+        all: calcFactor(),
+      },
+    };
   }
 
   function getGroupedByCategory(categoryName: string) {
     return {
       [categoryName]: {
-        all: getFactorCalculatorInScope(ctx => ctx.includes(categoryName))()
-      }
-    }
+        all: transformCalculatorInScope((ctx) => ctx.includes(categoryName))(),
+      },
+    };
   }
 
   console.table({
-    ...getGroupedByCategory('will cause autistic child'),
-    ...getGroupedByCategory('will cause neurotypical child'),
-    ...getGroupedBySubCategory('decided to skip'),
-    ...getGroupedBySubCategory('decided not to skip'),
-    ...getGroupedBySubCategory('autistic recipient'),
-    ...getGroupedBySubCategory('neurotypical recipient'),
-    ...getGroupedBySubCategory('autistic donor'),
-    ...getGroupedBySubCategory('neurotypical donor'),
-  })
+    ...getGroupedByCategory('caused child to be autistic'),
+    ...getGroupedByCategory('caused child to be neurotypical'),
+    ...getGroupedBySubCategory('decision is to skip'),
+    ...getGroupedBySubCategory('decision is not to skip'),
+    ...getGroupedBySubCategory('recipient is autistic'),
+    ...getGroupedBySubCategory('recipient is neurotypical'),
+    ...getGroupedBySubCategory('donor is autistic'),
+    ...getGroupedBySubCategory('donor is neurotypical'),
+  });
 }
 
-type Op<Ctx, O, RO> = { getFactor: (ctx: Ctx) => number, option: O, reverseOption: RO };
-
-function applyPipeline<
-  const O1 extends string, const RO1 extends string,
->(
-  sourceArray: MatrixEntries,
-  pipelineOperations: [
-    Op<[], O1, RO1>,
-  ]
-): {
-  ctx: [O1 | RO1],
-  factor: number
-}[]
-
-function applyPipeline<
-  const O1 extends string, const RO1 extends string,
-  const O2 extends string, const RO2 extends string,
->(
-  sourceArray: MatrixEntries,
-  pipelineOperations: [
-    Op<[        ], O1, RO1>,
-    Op<[O1 | RO1], O2, RO2>,
-  ]
-): {
-  ctx: [O1 | RO1, O2 | RO2],
-  factor: number
-}[]
-
-function applyPipeline<
-  const O1 extends string, const RO1 extends string,
-  const O2 extends string, const RO2 extends string,
-  const O3 extends string, const RO3 extends string,
->(
-  sourceArray: MatrixEntries,
-  pipelineOperations: [
-    Op<[                  ], O1, RO1>,
-    Op<[O1 | RO1          ], O2, RO2>,
-    Op<[O1 | RO1, O2 | RO2], O3, RO3>,
-  ]
-): {
-  ctx: [O1 | RO1, O2 | RO2, O3 | RO3],
-  factor: number
-}[]
-
-function applyPipeline<
-  const O1 extends string, const RO1 extends string,
-  const O2 extends string, const RO2 extends string,
-  const O3 extends string, const RO3 extends string,
-  const O4 extends string, const RO4 extends string,
->(
-  sourceArray: MatrixEntries,
-  pipelineOperations: [
-    Op<[                            ], O1, RO1>,
-    Op<[O1 | RO1                    ], O2, RO2>,
-    Op<[O1 | RO1, O2 | RO2          ], O3, RO3>,
-    Op<[O1 | RO1, O2 | RO2, O3 | RO3], O4, RO4>,
-  ]
-): {
-  ctx: [O1 | RO1, O2 | RO2, O3 | RO3, O4 | RO4],
-  factor: number
-}[]
-
-function applyPipeline<
-  const O1 extends string, const RO1 extends string,
-  const O2 extends string, const RO2 extends string,
-  const O3 extends string, const RO3 extends string,
-  const O4 extends string, const RO4 extends string,
-  const O5 extends string, const RO5 extends string,
->(
-  sourceArray: MatrixEntries,
-  pipelineOperations: [
-    Op<[                                      ], O1, RO1>,
-    Op<[O1 | RO1                              ], O2, RO2>,
-    Op<[O1 | RO1, O2 | RO2                    ], O3, RO3>,
-    Op<[O1 | RO1, O2 | RO2, O3 | RO3          ], O4, RO4>,
-    Op<[O1 | RO1, O2 | RO2, O3 | RO3, O4 | RO4], O5, RO5>,
-  ]
-): {
-  ctx: [O1 | RO1, O2 | RO2, O3 | RO3, O4 | RO4, O5 | RO5],
-  factor: number
-}[]
-
-function applyPipeline<
-  const O1 extends string, const RO1 extends string,
-  const O2 extends string, const RO2 extends string,
-  const O3 extends string, const RO3 extends string,
-  const O4 extends string, const RO4 extends string,
-  const O5 extends string, const RO5 extends string,
-  const O6 extends string, const RO6 extends string,
->(
-  sourceArray: MatrixEntries,
-  pipelineOperations: [
-    Op<[                                                ], O1, RO1>,
-    Op<[O1 | RO1                                        ], O2, RO2>,
-    Op<[O1 | RO1, O2 | RO2                              ], O3, RO3>,
-    Op<[O1 | RO1, O2 | RO2, O3 | RO3                    ], O4, RO4>,
-    Op<[O1 | RO1, O2 | RO2, O3 | RO3, O4 | RO4          ], O5, RO5>,
-    Op<[O1 | RO1, O2 | RO2, O3 | RO3, O4 | RO4, O5 | RO5], O6, RO6>,
-  ]
-): {
-  ctx: [O1 | RO1, O2 | RO2, O3 | RO3, O4 | RO4, O5 | RO5, O6 | RO6],
-  factor: number
-}[]
-
-function applyPipeline<
-  const O1 extends string, const RO1 extends string,
-  const O2 extends string, const RO2 extends string,
-  const O3 extends string, const RO3 extends string,
-  const O4 extends string, const RO4 extends string,
-  const O5 extends string, const RO5 extends string,
-  const O6 extends string, const RO6 extends string,
-  const O7 extends string, const RO7 extends string,
->(
-  sourceArray: MatrixEntries,
-  pipelineOperations: [
-    Op<[                                                          ], O1, RO1>,
-    Op<[O1 | RO1                                                  ], O2, RO2>,
-    Op<[O1 | RO1, O2 | RO2                                        ], O3, RO3>,
-    Op<[O1 | RO1, O2 | RO2, O3 | RO3                              ], O4, RO4>,
-    Op<[O1 | RO1, O2 | RO2, O3 | RO3, O4 | RO4                    ], O5, RO5>,
-    Op<[O1 | RO1, O2 | RO2, O3 | RO3, O4 | RO4, O5 | RO5          ], O6, RO6>,
-    Op<[O1 | RO1, O2 | RO2, O3 | RO3, O4 | RO4, O5 | RO5, O6 | RO6], O7, RO7>,
-  ]
-): {
-  ctx: [O1 | RO1, O2 | RO2, O3 | RO3, O4 | RO4, O5 | RO5, O6 | RO6, O7 | RO7],
-  factor: number
-}[]
-
-function applyPipeline<
-  const O1 extends string, const RO1 extends string,
-  const O2 extends string, const RO2 extends string,
-  const O3 extends string, const RO3 extends string,
-  const O4 extends string, const RO4 extends string,
-  const O5 extends string, const RO5 extends string,
-  const O6 extends string, const RO6 extends string,
-  const O7 extends string, const RO7 extends string,
-  const O8 extends string, const RO8 extends string,
->(
-  sourceArray: MatrixEntries,
-  pipelineOperations: [
-    Op<[                                                                    ], O1, RO1>,
-    Op<[O1 | RO1                                                            ], O2, RO2>,
-    Op<[O1 | RO1, O2 | RO2                                                  ], O3, RO3>,
-    Op<[O1 | RO1, O2 | RO2, O3 | RO3                                        ], O4, RO4>,
-    Op<[O1 | RO1, O2 | RO2, O3 | RO3, O4 | RO4                              ], O5, RO5>,
-    Op<[O1 | RO1, O2 | RO2, O3 | RO3, O4 | RO4, O5 | RO5                    ], O6, RO6>,
-    Op<[O1 | RO1, O2 | RO2, O3 | RO3, O4 | RO4, O5 | RO5, O6 | RO6          ], O7, RO7>,
-    Op<[O1 | RO1, O2 | RO2, O3 | RO3, O4 | RO4, O5 | RO5, O6 | RO6, O7 | RO7], O8, RO8>,
-  ]
-): {
-  ctx: [O1 | RO1, O2 | RO2, O3 | RO3, O4 | RO4, O5 | RO5, O6 | RO6, O7 | RO7, O8 | RO8],
-  factor: number
-}[]
-
-function applyPipeline(
-  sourceArray: MatrixEntries,
-  pipelineOperations: (
-    Op<any, string, string>
-  )[]
-): {
-  ctx: string[],
-  factor: number
-}[]
-{
-  let matrix = sourceArray
-
-  for (const { getFactor, option, reverseOption } of pipelineOperations) {
-
-    matrix = matrix.flatMap(({ ctx, factor: previousFactor }) => {
-      const additionalFactor = (getFactor as (ctx: Array<string>) => number)(ctx);
-
-      if (additionalFactor < 0 || additionalFactor > 1)
-        throw Error('Incorrect chances');
-
-      return [
-        { ctx: [...ctx, option       ], factor: previousFactor * (additionalFactor    )},
-        { ctx: [...ctx, reverseOption], factor: previousFactor * (1 - additionalFactor)}
-      ]
-    });
-  }
-
-  logMatrix(matrix);
-
-  return matrix;
-}
-
-function logMatrix(matrix: MatrixEntries) {
+function logMatrix(matrix: MatrixEntries<Record<string, string>, number>) {
   console.table(
     matrix
-      .sort((a, b) => [...a.ctx].join(', ').localeCompare([...b.ctx].join(', ')))
-      .map(v => [stripTail(v.factor), ...v.ctx])
-  )
+      .sort((a, b) =>
+        renderCtx(a.ctx).join(', ').localeCompare(renderCtx(b.ctx).join(', '))
+      )
+      .map((v) => [stripTail(v.result), ...renderCtx(v.ctx)])
+  );
 }
 
 function stripTail(n: number) {
-  return Number(n.toFixed(10))
+  return Number(n.toFixed(10));
 }
-
-type MatrixEntries = {
-  ctx: Array<string>,
-  factor: number
-}[];
-
-type ASd =
-  | 'will cause autistic child'
-  | 'will cause neurotypical child'
-  | 'decided to skip'
-  | 'decided not to skip'
-  | 'autistic recipient'
-  | 'neurotypical recipient'
-  | 'autistic donor'
-  | 'neurotypical donor'

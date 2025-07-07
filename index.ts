@@ -73,7 +73,7 @@ function getChances(config: {
         factor *
         reverseFactorWhen(
           decisionIs,
-          'not to skip',
+          'not to skip the choice',
           ctx['recipient is'] === 'autistic'
             ? config.chanceThatRecipientWillSkipChoosingDonor
                 .ifRecipientIsAutistic
@@ -81,8 +81,8 @@ function getChances(config: {
                 .ifRecipientIsNeurotypical
         ),
 
-      options: ['to skip', 'not to skip'],
-      optionName: 'decision is',
+      options: ['to skip the choice', 'not to skip the choice'],
+      optionName: "recipient's decision is",
     },
     {
       transform: (factor, ctx, donorIs) =>
@@ -90,7 +90,7 @@ function getChances(config: {
         reverseFactorWhen(
           donorIs,
           'neurotypical',
-          ctx['decision is'] === 'not to skip'
+          ctx["recipient's decision is"] === 'not to skip the choice'
             ? ctx['recipient is'] === 'autistic'
               ? config.chanceThatInvolvedRecipientWillChooseAutisticDonor
                   .ifRecipientIsAutistic
@@ -159,8 +159,10 @@ function logInsightsFromMatrix(chances: { ctx: string[]; factor: number }[]) {
   console.table({
     ...getGroupedByCategory('caused child to be autistic'),
     ...getGroupedByCategory('caused child to be neurotypical'),
-    ...getGroupedBySubCategory('decision is to skip'),
-    ...getGroupedBySubCategory('decision is not to skip'),
+    ...getGroupedBySubCategory("recipient's decision is to skip the choice"),
+    ...getGroupedBySubCategory(
+      "recipient's decision is not to skip the choice"
+    ),
     ...getGroupedBySubCategory('recipient is autistic'),
     ...getGroupedBySubCategory('recipient is neurotypical'),
     ...getGroupedBySubCategory('donor is autistic'),
@@ -174,7 +176,7 @@ function logMatrix(matrix: MatrixEntries<Record<string, string>, number>) {
       .sort((a, b) =>
         renderCtx(a.ctx).join(', ').localeCompare(renderCtx(b.ctx).join(', '))
       )
-      .map((v) => [stripTail(v.result), ...renderCtx(v.ctx)])
+      .map((v) => ({ chance: stripTail(v.result * 100), ...v.ctx }))
   );
 }
 
